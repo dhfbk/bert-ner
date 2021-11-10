@@ -1,6 +1,6 @@
 # bert-ner
 
-Some script to train a named-entities recognizer with [BERT](https://en.wikipedia.org/wiki/BERT_(language_model)).
+A script to train a named-entities recognizer with [BERT](https://en.wikipedia.org/wiki/BERT_(language_model)).
 It works out-of-the-box for dataset having three labels: PER, LOC, ORG.
 
 It is partially inspired by [this blogpost](https://www.depends-on-the-definition.com/named-entity-recognition-with-bert/) by Tobias Sterbak.
