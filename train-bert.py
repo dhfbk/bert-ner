@@ -9,10 +9,10 @@ parser = argparse.ArgumentParser(description='Train a NER model with BERT.')
 parser.add_argument('action', choices=['train', 'test'], help="Choose whether to train the model or test it")
 parser.add_argument('file', help="TSV file containing train/test data")
 parser.add_argument('model', help="Model folder (it must exists in 'test' action)")
-parser.add_argument('--bert', help="BERT model name in Huggingface (default " + defaultBert + ")", required=False, default=defaultBert)
-parser.add_argument('--max_len', help="BERT maximum length of sequence (default " + str(defaultMaxLen) + ")", required=False, default=defaultMaxLen, type=int)
-parser.add_argument('--epochs', help="Number of training epochs (default " + str(defaultEpochs) + ")", required=False, default=defaultEpochs, type=int)
-parser.add_argument('--padding_label', help="Padding label (default " + str(defaultPaddingLabel) + ")", required=False, default=defaultPaddingLabel)
+parser.add_argument('--bert', help="BERT model name in Huggingface (default " + defaultBert + ")", required=False, default=defaultBert, metavar="MODEL_NAME")
+parser.add_argument('--max_len', help="BERT maximum length of sequence (default " + str(defaultMaxLen) + ")", required=False, default=defaultMaxLen, type=int, metavar="LEN")
+parser.add_argument('--epochs', help="Number of training epochs (default " + str(defaultEpochs) + ")", required=False, default=defaultEpochs, type=int, metavar="NUM")
+parser.add_argument('--pad_label', help="Padding label, it must be different from labels in the NER data (default " + str(defaultPaddingLabel) + ")", required=False, default=defaultPaddingLabel, metavar="LABEL")
 args = parser.parse_args()
 
 print("### Loading imports")
@@ -37,7 +37,7 @@ modelFolder = args.model
 bert_model = args.bert
 maxLen = args.max_len
 epochs = args.epochs
-padding_label = args.padding_label
+pad_label = args.pad_label
 train = True
 if args.action == "test":
     train = False
@@ -74,7 +74,7 @@ tokenizer = BertTokenizer.from_pretrained(bert_model, do_lower_case=False)
 if train:
     print("### Reading training data")
 
-    tag_values = ["O", padding_label]
+    tag_values = ["O", pad_label]
     tokens = []
     labels = []
     tokenized_texts_and_labels = []
@@ -113,7 +113,7 @@ if train:
         maxlen=maxLen, dtype="long", value=0.0,
         truncating="post", padding="post")
     tags = pad_sequences([[tag2idx.get(l) for l in lab] for lab in labels],
-        maxlen=maxLen, value=tag2idx[padding_label], padding="post",
+        maxlen=maxLen, value=tag2idx[pad_label], padding="post",
         dtype="long", truncating="post")
 
     attention_masks = [[float(i != 0.0) for i in ii] for ii in input_ids]
@@ -258,9 +258,9 @@ if train:
         validation_loss_values.append(eval_loss)
         print("Validation loss: {}".format(eval_loss))
         pred_tags = [tag_values[p_i] for p, l in zip(predictions, true_labels)
-                                     for p_i, l_i in zip(p, l) if tag_values[l_i] != padding_label]
+                                     for p_i, l_i in zip(p, l) if tag_values[l_i] != pad_label]
         valid_tags = [tag_values[l_i] for l in true_labels
-                                      for l_i in l if tag_values[l_i] != padding_label]
+                                      for l_i in l if tag_values[l_i] != pad_label]
         print("Validation Accuracy: {}".format(accuracy_score(pred_tags, valid_tags)))
         # print("Validation F1-Score: {}".format(f1_score(pred_tags, valid_tags)))
         print()
@@ -329,7 +329,7 @@ else:
         all_labels += new_labels
         all_gold += gold_labels
 
-    okLabels = [t for t in tag_values if t != "O" and t != padding_label]
+    okLabels = [t for t in tag_values if t != "O" and t != pad_label]
     print("Macro:", precision_recall_fscore_support(all_gold, all_labels, average='macro', labels=okLabels)[:3])
     print("Micro:", precision_recall_fscore_support(all_gold, all_labels, average='micro', labels=okLabels)[:3])
     results = precision_recall_fscore_support(all_gold, all_labels, average=None, labels=okLabels)
