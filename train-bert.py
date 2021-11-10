@@ -155,8 +155,9 @@ if train:
     ## Store the average loss after each epoch so we can plot them.
     loss_values, validation_loss_values = [], []
 
+    print()
     for i in range(epochs):
-        print("Epoch", str(i + 1) + "/" + str(epochs))
+        print("# Epoch", str(i + 1) + "/" + str(epochs))
         # ========================================
         #               Training
         # ========================================
