@@ -4,7 +4,7 @@ defaultBert = 'dbmdz/bert-base-italian-cased'
 defaultMaxLen = 200
 defaultEpochs = 3
 
-parser = argparse.ArgumentParser(description='Train a NER model with BERT. Labels must be PER, ORG, LOC.')
+parser = argparse.ArgumentParser(description='Train a NER model with BERT.')
 parser.add_argument('action', choices=['train', 'test'], help="Choose whether to train the model or test it")
 parser.add_argument('file', help="TSV file containing train/test data")
 parser.add_argument('model', help="Model folder (it must exists in 'test' action)")
@@ -12,6 +12,8 @@ parser.add_argument('--bert', help="BERT model name in Huggingface (default " + 
 parser.add_argument('--max_len', help="BERT maximum length of sequence (default " + str(defaultMaxLen) + ")", required=False, default=defaultMaxLen, type=int)
 parser.add_argument('--epochs', help="Number of training epochs (default " + str(defaultEpochs) + ")", required=False, default=defaultEpochs, type=int)
 args = parser.parse_args()
+
+print("### Loading imports")
 
 import pandas as pd
 import torch
@@ -39,10 +41,11 @@ if args.action == "test":
 
 ###
 
-bs = 32
-tag_values = ["ORG", "O", "LOC", "PER"]
-tag_values.append("PAD")
-tag2idx = {t: i for i, t in enumerate(tag_values)}
+batch_size = 32
+FULL_FINETUNING = True
+lr = 3e-5
+eps = 1e-8
+max_grad_norm = 1.0
 
 def tokenize_and_preserve_labels(sentence, text_labels):
     tokenized_sentence = []
@@ -66,7 +69,9 @@ ne_re = re.compile(r"^(.*)\s([^\s]+)$")
 tokenizer = BertTokenizer.from_pretrained(bert_model, do_lower_case=False)
 
 if train:
-    print("### TRAINING MODEL")
+    print("### Reading training data")
+
+    tag_values = ["O", "PAD"]
     tokens = []
     labels = []
     tokenized_texts_and_labels = []
@@ -80,8 +85,23 @@ if train:
                 labels = []
                 continue
             m = ne_re.match(line)
-            tokens.append(m.group(1))
-            labels.append(m.group(2))
+            token = m.group(1)
+            label = m.group(2)
+            tokens.append(token)
+            labels.append(label)
+            if label not in tag_values:
+                tag_values.append(label)
+
+    if not os.path.exists(modelFolder):
+        os.makedirs(modelFolder)
+    with open(os.path.join(modelFolder, "labels.txt"), "w") as fw:
+        for tag in tag_values:
+            fw.write(tag)
+            fw.write("\n")
+
+    tag2idx = {t: i for i, t in enumerate(tag_values)}
+
+    print("### Training model")
 
     tokenized_texts = [token_label_pair[0] for token_label_pair in tokenized_texts_and_labels]
     labels = [token_label_pair[1] for token_label_pair in tokenized_texts_and_labels]
@@ -106,11 +126,11 @@ if train:
 
     train_data = TensorDataset(tr_inputs, tr_masks, tr_tags)
     train_sampler = RandomSampler(train_data)
-    train_dataloader = DataLoader(train_data, sampler=train_sampler, batch_size=bs)
+    train_dataloader = DataLoader(train_data, sampler=train_sampler, batch_size=batch_size)
 
     valid_data = TensorDataset(val_inputs, val_masks, val_tags)
     valid_sampler = SequentialSampler(valid_data)
-    valid_dataloader = DataLoader(valid_data, sampler=valid_sampler, batch_size=bs)
+    valid_dataloader = DataLoader(valid_data, sampler=valid_sampler, batch_size=batch_size)
 
     model = BertForTokenClassification.from_pretrained(
         bert_model,
@@ -120,7 +140,6 @@ if train:
     )
     model.cuda();
 
-    FULL_FINETUNING = True
     if FULL_FINETUNING:
         param_optimizer = list(model.named_parameters())
         no_decay = ['bias', 'gamma', 'beta']
@@ -136,11 +155,9 @@ if train:
 
     optimizer = AdamW(
         optimizer_grouped_parameters,
-        lr=3e-5,
-        eps=1e-8
+        lr=lr,
+        eps=eps
     )
-
-    max_grad_norm = 1.0
 
     # Total number of training steps is number of batches * number of epochs.
     total_steps = len(train_dataloader) * epochs
@@ -245,11 +262,10 @@ if train:
         # print("Validation F1-Score: {}".format(f1_score(pred_tags, valid_tags)))
         print()
 
-    os.makedirs(modelFolder)
     model.save_pretrained(modelFolder)
 
 else:
-    print("### TESTING MODEL")
+    print("### Loading test data")
     tokens = []
     labels = []
     tokenized_texts_and_labels = []
@@ -265,6 +281,18 @@ else:
             m = ne_re.match(line)
             tokens.append(m.group(1))
             labels.append(m.group(2))
+
+    tag_values = []
+    with open(os.path.join(modelFolder, "labels.txt"), "r") as f:
+        for line in f:
+            line = line.strip()
+            if len(line) == 0:
+                continue
+            tag_values.append(line)
+            
+    tag2idx = {t: i for i, t in enumerate(tag_values)}
+
+    print("### Testing model")
 
     tokenized_texts = [token_label_pair[0] for token_label_pair in tokenized_texts_and_labels]
     labels = [token_label_pair[1] for token_label_pair in tokenized_texts_and_labels]
@@ -298,13 +326,13 @@ else:
         all_labels += new_labels
         all_gold += gold_labels
 
-    print("Macro:", precision_recall_fscore_support(all_gold, all_labels, average='macro', labels=["PER", "LOC", "ORG"])[:3])
-    print("Micro:", precision_recall_fscore_support(all_gold, all_labels, average='micro', labels=["PER", "LOC", "ORG"])[:3])
-    results = precision_recall_fscore_support(all_gold, all_labels, average=None, labels=["PER", "LOC", "ORG"])
-    support = results[3]
-    results = np.delete(results, 3, axis=0)
+    okLabels = [t for t in tag_values if t != "O" and t != "PAD"]
+    print("Macro:", precision_recall_fscore_support(all_gold, all_labels, average='macro', labels=okLabels)[:3])
+    print("Micro:", precision_recall_fscore_support(all_gold, all_labels, average='micro', labels=okLabels)[:3])
+    results = precision_recall_fscore_support(all_gold, all_labels, average=None, labels=okLabels)
+    support = results[len(results) - 1]
+    results = np.delete(results, len(results) - 1, axis=0)
     results = np.transpose(results)
-    print("PER:", results[0])
-    print("LOC:", results[1])
-    print("ORG:", results[2])
+    for i, l in enumerate(okLabels):
+        print(l + ":", results[i])
     print("Support:", support)
