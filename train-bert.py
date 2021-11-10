@@ -1,14 +1,16 @@
 import argparse
 
 defaultBert = 'dbmdz/bert-base-italian-cased'
-defaultMaxLen = 100
+defaultMaxLen = 200
+defaultEpochs = 3
 
 parser = argparse.ArgumentParser(description='Train a NER model with BERT. Labels must be PER, ORG, LOC.')
 parser.add_argument('action', choices=['train', 'test'], help="Choose whether to train the model or test it")
 parser.add_argument('file', help="TSV file containing train/test data")
 parser.add_argument('model', help="Model folder (it must exists in 'test' action)")
 parser.add_argument('--bert', help="BERT model name in Huggingface (default " + defaultBert + ")", required=False, default=defaultBert)
-parser.add_argument('--max_len', help="BERT maximum length of sequence (default " + str(defaultMaxLen) + ")", required=False, default=defaultMaxLen)
+parser.add_argument('--max_len', help="BERT maximum length of sequence (default " + str(defaultMaxLen) + ")", required=False, default=defaultMaxLen, type=int)
+parser.add_argument('--epochs', help="Number of training epochs (default " + str(defaultEpochs) + ")", required=False, default=defaultEpochs, type=int)
 args = parser.parse_args()
 
 import pandas as pd
@@ -30,6 +32,7 @@ ner_filename = args.file
 modelFolder = args.model
 bert_model = args.bert
 maxLen = args.max_len
+epochs = args.epochs
 train = True
 if args.action == "test":
     train = False
@@ -137,7 +140,6 @@ if train:
         eps=1e-8
     )
 
-    epochs = 3
     max_grad_norm = 1.0
 
     # Total number of training steps is number of batches * number of epochs.
@@ -153,7 +155,8 @@ if train:
     ## Store the average loss after each epoch so we can plot them.
     loss_values, validation_loss_values = [], []
 
-    for _ in trange(epochs, desc="Epoch"):
+    for i in range(epochs):
+        print("Epoch", str(i + 1) + "/" + str(epochs))
         # ========================================
         #               Training
         # ========================================
