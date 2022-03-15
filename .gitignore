@@ -1,4 +1,10 @@
 model*
 env
-data
+data*
+crf*
+prova*
+__pycache__
+
+output.txt
+*.sh
 

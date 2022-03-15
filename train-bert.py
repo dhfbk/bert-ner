@@ -331,8 +331,10 @@ else:
         all_gold += gold_labels
 
     okLabels = [t for t in tag_values if t != "O" and t != pad_label]
-    print("Macro:", precision_recall_fscore_support(all_gold, all_labels, average='macro', labels=okLabels)[:3])
-    print("Micro:", precision_recall_fscore_support(all_gold, all_labels, average='micro', labels=okLabels)[:3])
+    micro = precision_recall_fscore_support(all_gold, all_labels, average='micro', labels=okLabels)[:3]
+    macro = precision_recall_fscore_support(all_gold, all_labels, average='macro', labels=okLabels)[:3]
+    print("Macro:", macro)
+    print("Micro:", micro)
     results = precision_recall_fscore_support(all_gold, all_labels, average=None, labels=okLabels)
     support = results[len(results) - 1]
     results = np.delete(results, len(results) - 1, axis=0)
@@ -340,3 +342,12 @@ else:
     for i, l in enumerate(okLabels):
         print(l + ":", results[i])
     print("Support:", support)
+
+    # printing stuff
+    tableLabels = {}
+    tableLabels["Micro"] = "%s & %s & %s" % (round(micro[0], 3), round(micro[1], 3), round(micro[2], 3))
+    tableLabels["Macro"] = "%s & %s & %s" % (round(macro[0], 3), round(macro[1], 3), round(macro[2], 3))
+    for i, l in enumerate(okLabels):
+        tableLabels[l] = "%s & %s & %s" % (round(results[i][0], 3), round(results[i][1], 3), round(results[i][2], 3))
+
+    print(tableLabels["PER"], "&", tableLabels["LOC"], "&", tableLabels["ORG"], "&", tableLabels["Micro"], "&", tableLabels["Macro"])
